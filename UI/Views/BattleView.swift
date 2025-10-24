@@ -39,8 +39,8 @@ struct BattleBoardsView: View {
 
     @StateObject private var animationState = BattleAnimationState()
 
-    private func dur(_ base: Double) -> Double {
-        base * game.speed.profile.animScale
+    private func dur(_ normal: Double) -> Double {
+        game.tempo.duration(forNormalDuration: normal)
     }
 
     var body: some View {
@@ -76,7 +76,7 @@ struct BattleBoardsView: View {
                 shatterNonce: shatterNonce,
                 onSelect: { _ in },
                 cardSize: cardSize,
-                durationScale: game.speed.profile.animScale
+                tempo: game.tempo
             )
 
             Divider().padding(.vertical, 4)
@@ -110,7 +110,7 @@ struct BattleBoardsView: View {
                 shatterNonce: shatterNonce,
                 onSelect: { _ in },
                 cardSize: cardSize,
-                durationScale: game.speed.profile.animScale
+                tempo: game.tempo
             )
 
             Spacer(minLength: 8)
@@ -228,10 +228,11 @@ struct BattleBoardsView: View {
                 }
             } else {
                 // Normal heal animation
-                withAnimation(.easeInOut(duration: dur(0.18))) { animationState.startHealAnimation() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + dur(0.18)) {
+                let healDuration = dur(BattleTempo.healNormalDuration)
+                withAnimation(.easeInOut(duration: healDuration)) { animationState.startHealAnimation() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + healDuration) {
                     game.commitPendingEffect()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + dur(0.18)) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + healDuration) {
                         animationState.healPulse = false
                     }
                 }

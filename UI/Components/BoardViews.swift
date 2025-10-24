@@ -30,8 +30,7 @@ struct BoardView: View {
     let shatterNonce: Int
     let onSelect: (Int) -> Void
     let cardSize: CGSize
-    let durationScale: Double
-
+    let tempo: BattleTempo
 
     @State private var shatterFlags: [Bool] = Array(repeating: false, count: Board.maxSlots)
 
@@ -76,14 +75,17 @@ struct BoardView: View {
                             insertion: .scale.combined(with: .opacity),
                             removal: .scale.combined(with: .opacity)
                         ))
-                        .animation(.easeInOut(duration: 0.3 * durationScale), value: card)
+                        .animation(
+                            .easeInOut(duration: tempo.duration(forNormalDuration: BattleTempo.cardAnimationNormalDuration)),
+                            value: card
+                        )
 
                         DamageOverlay(
                             text: hitText ?? "-",
                             isHeal: false,
                             cardSize: cardSize,
                             isVisible: isDefender && shakePulse,
-                            durationScale: durationScale
+                            tempo: tempo
                         )
 
                         DamageOverlay(
@@ -91,13 +93,13 @@ struct BoardView: View {
                             isHeal: true,
                             cardSize: cardSize,
                             isVisible: isHealed && healPulse,
-                            durationScale: durationScale
+                            tempo: tempo
                         )
 
                         if isShattered {
                             DeathAnimation(
                                 isDying: shatterTrigger,
-                                durationScale: durationScale
+                                tempo: tempo
                             )
                             .frame(width: cardSize.width, height: cardSize.height)
                             .zIndex(2)

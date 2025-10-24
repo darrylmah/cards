@@ -171,6 +171,10 @@ class AutoBattleManager: ObservableObject {
             while game.hasPendingEffect {
                 try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             }
+            
+            if !game.fastForward {
+                try? await Task.sleep(nanoseconds: game.tempo.tickNanoseconds)
+            }
         }
         
         await MainActor.run {

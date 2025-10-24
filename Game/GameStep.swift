@@ -100,14 +100,19 @@ class GameStep: ObservableObject {
         // Don't call gameState?.setSpeed() here to avoid circular calls
     }
     
-    func getAnimationDuration() -> Double {
-        // Use GameState's speed instead of our own
-        guard let gameState = gameState else { return 0.3 }
-        switch gameState.speed {
-        case .slow: return 0.6
-        case .normal: return 0.3
-        case .fast: return 0.15
+    private var tempo: BattleTempo {
+        if let state = gameState {
+            return state.tempo
         }
+        return speed.tempo
+    }
+    
+    func duration(forNormalDuration normalDuration: Double) -> Double {
+        tempo.duration(forNormalDuration: normalDuration)
+    }
+    
+    func getAnimationDuration() -> Double {
+        duration(forNormalDuration: BattleTempo.attackNormalDuration)
     }
     
     // MARK: - Private Methods

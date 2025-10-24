@@ -10,10 +10,10 @@ import SwiftUI
 // MARK: - Death Animation (simple fade out)
 struct DeathAnimation: View {
     @Binding var isDying: Bool
-    let durationScale: Double
+    let tempo: BattleTempo
     @State private var opacity: CGFloat = 1
     
-    private var duration: Double { 0.8 * durationScale }
+    private var duration: Double { tempo.duration(forNormalDuration: BattleTempo.deathFadeNormalDuration) }
 
     var body: some View {
         RoundedRectangle(cornerRadius: 10)

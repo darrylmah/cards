@@ -23,6 +23,41 @@ struct SpeedProfile {
     let animScale: Double  // animation multiplier (BattleView)
 }
 
+struct BattleTempo {
+    /// Baseline animation scale that represents the "normal" timing the game
+    /// was authored against. Adjusting `BattleSpeed` values will stretch or
+    /// shrink durations relative to this constant.
+    static let baseAnimScale: Double = 3.2
+
+    /// Canonical normal-speed durations that various subsystems consume.
+    ///
+    /// These values are kept here so that any timing tweak lives alongside
+    /// the speed profile and automatically inherits user speed changes.
+    static let attackNormalDuration: Double = 0.3
+    static let healNormalDuration: Double = 0.18
+    static let cardAnimationNormalDuration: Double = 0.3
+    static let damageOverlayNormalDuration: Double = 0.6
+    static let deathFadeNormalDuration: Double = 0.8
+
+    let speed: BattleSpeed
+
+    private var profile: SpeedProfile { speed.profile }
+
+    /// Multiplier applied to any normal-speed duration to reach the current tempo.
+    var animationScale: Double { profile.animScale / Self.baseAnimScale }
+
+    /// Convenience for scaling a duration that was authored for normal speed.
+    func duration(forNormalDuration normalDuration: Double) -> Double {
+        normalDuration * animationScale
+    }
+
+    /// Delay between automatic actions while auto-battling, expressed in
+    /// nanoseconds for use with `Task.sleep`.
+    var tickNanoseconds: UInt64 {
+        profile.tickMs * 1_000_000
+    }
+}
+
 extension BattleSpeed {
     var profile: SpeedProfile {
         switch self {
@@ -31,4 +66,5 @@ extension BattleSpeed {
         case .fast:   return .init(tickMs: 600,  animScale: 1.6)
         }
     }
+    var tempo: BattleTempo { BattleTempo(speed: self) }
 }

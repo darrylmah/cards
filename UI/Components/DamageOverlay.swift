@@ -12,7 +12,7 @@ struct DamageOverlay: View {
     let isHeal: Bool
     let cardSize: CGSize
     let isVisible: Bool
-    let durationScale: Double
+    let tempo: BattleTempo
     
     @State private var floatT: CGFloat = 0
 
@@ -62,7 +62,7 @@ struct DamageOverlay: View {
         }
         .onChange(of: isVisible) { newValue in
             if newValue {
-                withAnimation(.easeOut(duration: 0.6 * durationScale)) {
+                withAnimation(.easeOut(duration: tempo.duration(forNormalDuration: BattleTempo.damageOverlayNormalDuration))) {
                     floatT = 1
                 }
             } else {
@@ -71,7 +71,7 @@ struct DamageOverlay: View {
         }
         .onAppear {
             if isVisible {
-                withAnimation(.easeOut(duration: 0.6 * durationScale)) {
+                withAnimation(.easeOut(duration: tempo.duration(forNormalDuration: BattleTempo.damageOverlayNormalDuration))) {
                     floatT = 1
                 }
             }

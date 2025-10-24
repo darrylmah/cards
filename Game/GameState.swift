@@ -52,6 +52,8 @@ final class GameState: ObservableObject {
         self.autoBattleManager = AutoBattleManager(gameState: self)
         self.gameStep.setGameState(self)
     }
+    
+    var tempo: BattleTempo { speed.tempo }
 
     var currentActor: ActorRef? {
         guard actorPtr < actorQueue.count else { return nil }
