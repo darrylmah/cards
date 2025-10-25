@@ -39,7 +39,12 @@ struct BoardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Title removed to maximize space
-            let columns = Array(repeating: GridItem(.fixed(cardSize.width), spacing: 8, alignment: .center), count: 4)
+            let columns = Array(
+                repeating: GridItem(
+                    .fixed(cardSize.width),
+                    spacing: BattleLayout.gridSpacing,
+                    alignment: .center),
+                count: BattleLayout.boardColumns)
             LazyVGrid(columns: columns, alignment: .center, spacing: 8) {
                 ForEach(Array(0..<Board.maxSlots) as [Int], id: \.self) { (idx: Int) in
                     // For defending board (enemy), reverse the display order
@@ -67,7 +72,7 @@ struct BoardView: View {
                         .opacity(hideForFlight ? 0 : 1)
                         .modifier(
                             ShakeEffect(
-                                amount: (isDefender && shakePulse && !reduceMotion) ? 8 : 0,
+                                amount: (isDefender && shakePulse && !reduceMotion) ? BattleLayout.shakeAmount : 0,
                                 animatableData: (isDefender && shakePulse && !reduceMotion) ? 1 : 0
                             )
                         )

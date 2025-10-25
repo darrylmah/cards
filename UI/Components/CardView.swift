@@ -14,9 +14,9 @@ struct CardView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
                 .fill(.ultraThinMaterial)
-                .shadow(radius: 3)
+                .shadow(radius: BattleLayout.cardShadowRadius)
 
             VStack(spacing: 6) {
                 // Name

@@ -16,7 +16,7 @@ struct DeathAnimation: View {
     private var duration: Double { tempo.duration(forNormalDuration: BattleTempo.deathFadeNormalDuration) }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 10)
+        RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
             .fill(.red.opacity(0.8))
             .opacity(opacity)
             .allowsHitTesting(false)

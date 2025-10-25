@@ -62,7 +62,7 @@ class BattleAnimationState: ObservableObject {
 
 // MARK: - Shake Effect
 struct ShakeEffect: GeometryEffect {
-    var amount: CGFloat = 8
+    var amount: CGFloat = BattleLayout.shakeAmount
     var shakesPerUnit: CGFloat = 3
     var animatableData: CGFloat
 

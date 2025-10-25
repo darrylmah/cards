@@ -14,13 +14,12 @@ struct CollectionView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let hPad: CGFloat = 16
-            let spacing: CGFloat = 8
-            let cols = [GridItem(.flexible(), spacing: spacing),
-                        GridItem(.flexible(), spacing: spacing),
-                        GridItem(.flexible(), spacing: spacing)]
-            let cardW = (geo.size.width - hPad*2 - spacing*2) / 3
-            let cardH = cardW * 1.27
+            let hPad: CGFloat = BattleLayout.outerPadding
+            let spacing: CGFloat = BattleLayout.gridSpacing
+            let cols = Array(repeating: GridItem(.flexible(), spacing: spacing), count: 3)
+            let cardColumns: CGFloat = 3
+            let cardW = (geo.size.width - hPad * 2 - spacing * (cardColumns - 1)) / cardColumns
+            let cardH = cardW * BattleLayout.cardAspectRatio
 
             VStack(spacing: 12) {
                 HStack {

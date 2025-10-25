@@ -270,7 +270,7 @@ struct BattleBoardsView: View {
                         }
                         // Impact flash on defender slot
                         if animationState.attackPulse {
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
                                 .fill(Color.white.opacity(0.22))
                                 .frame(width: endRect.width, height: endRect.height)
                                 .position(x: endRect.midX, y: endRect.midY)

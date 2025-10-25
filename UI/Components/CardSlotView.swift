@@ -23,10 +23,10 @@ struct CardSlotView: View {
                     CardView(card: c, size: size)
                 } else {
                     // Empty placeholder with consistent frame
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
                         .strokeBorder(.secondary, lineWidth: 1)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
                                 .fill(.ultraThinMaterial)
                         )
                         .frame(width: size.width, height: size.height)
@@ -38,12 +38,12 @@ struct CardSlotView: View {
             }
         }
         .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius))
         .frame(minWidth: size.width, minHeight: size.height)
         // Highlight border
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isHighlighted ? .yellow : .clear, lineWidth: 3)
+            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
+                .strokeBorder(isHighlighted ? .yellow : .clear, lineWidth: BattleLayout.cardHighlightLineWidth)
         )
         .disabled(card == nil)
     }
