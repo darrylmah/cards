@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct TeamBuilderView: View {
     @Binding var pool: [Card]
@@ -29,10 +28,6 @@ struct TeamBuilderView: View {
 
     private var usedEnergy: Int { board.totalSelectedEnergy }
     private var remainingEnergy: Int { max(0, energyCap - usedEnergy) }
-
-    private func indexOfCardInBoard(_ id: UUID) -> Int? { board.slots.firstIndex { $0?.id == id } }
-    private func removeCardFromPool(_ id: UUID) { pool.removeAll { $0.id == id } }
-    private func cardFromPool(_ id: UUID) -> Card? { pool.first { $0.id == id } }
 
     private func boardContainsCard(id: UUID) -> Bool { board.slots.contains { $0?.id == id } }
 
@@ -66,9 +61,8 @@ struct TeamBuilderView: View {
             isHighlighted: highlighted,
             isPlayerSide: true,
             onTap: {
-                if let existing = board.slots[index] {
+                if board.slots[index] != nil {
                     board.slots[index] = nil
-                    pool.append(existing)
                 }
             },
             size: size
@@ -94,22 +88,28 @@ struct TeamBuilderView: View {
     
     @ViewBuilder
     private func poolCardView(_ card: Card, size: CGSize, affordable: Bool) -> some View {
-        CardSlotView(card: card, index: 0, isHighlighted: false, isPlayerSide: true, onTap: {
-            guard affordable else { return }
+        let isSelected = boardContainsCard(id: card.id)
+        let isInactive = isSelected || !affordable
+
+        return CardSlotView(card: card, index: 0, isHighlighted: false, isPlayerSide: true, onTap: {
+            guard !isInactive else { return }
             if let empty = board.firstEmptyIndex, remainingEnergy >= card.energy {
                 board.slots[empty] = card
-                pool.removeAll { $0.id == card.id }
             }
         },
         size: size
         )
         .overlay(
             RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
-                .fill(Color.red.opacity(affordable ? 0 : 0.22))
+                .fill(
+                    isSelected
+                    ? Color.black.opacity(0.35)
+                    : Color.red.opacity(affordable ? 0 : 0.22)
+                )
         )
         .onLongPressGesture { selectedCardForDetail = card }
         .onDrag {
-            guard affordable else { return NSItemProvider() }
+            guard affordable, !isSelected else { return NSItemProvider() }
             draggingID = card.id
             return NSItemProvider(object: card.id.uuidString as NSString)
         }
@@ -177,16 +177,14 @@ struct TeamBuilderView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Your Formation").font(.headline)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(0..<Board.maxSlots, id: \.self) { idx in
-                                formationSlot(at: idx, size: metrics.formationCardSize)
-                            }
+                    LazyVGrid(columns: metrics.formationColumns, alignment: .center, spacing: BattleLayout.gridSpacing) {
+                        ForEach(0..<Board.maxSlots, id: \.self) { idx in
+                            formationSlot(at: idx, size: metrics.formationCardSize)
                         }
-                        .padding(.horizontal, metrics.horizontalPadding)
                     }
-                    .frame(height: metrics.topHeight - 24)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
+                .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.verticalPadding)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -210,7 +208,7 @@ struct TeamBuilderView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-
+                
                 Button(action: onSubmit) { Text("Submit & Start Battle").bold() }
                     .buttonStyle(.borderedProminent)
                     .disabled(usedEnergy == 0 || usedEnergy > energyCap)
@@ -228,9 +226,9 @@ struct TeamBuilderView: View {
     }
     
     private struct LayoutMetrics {
-        let topHeight: CGFloat
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
+        let formationColumns: [GridItem]
         let formationCardSize: CGSize
         let poolCardColumns: Int
         let poolCardSize: CGSize
@@ -238,7 +236,6 @@ struct TeamBuilderView: View {
         init(geometry: GeometryProxy) {
             horizontalPadding = BattleLayout.outerPadding
             verticalPadding = 12
-            topHeight = geometry.size.height * 0.33
 
             let formationWidth = (
                 geometry.size.width
@@ -248,6 +245,14 @@ struct TeamBuilderView: View {
             formationCardSize = CGSize(
                 width: formationWidth,
                 height: formationWidth * BattleLayout.cardAspectRatio
+            )
+            formationColumns = Array(
+                repeating: GridItem(
+                    .fixed(formationWidth),
+                    spacing: BattleLayout.gridSpacing,
+                    alignment: .center
+                ),
+                count: BattleLayout.boardColumns
             )
 
             poolCardColumns = 3

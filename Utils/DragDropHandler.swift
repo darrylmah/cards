@@ -20,17 +20,13 @@ struct DragDropHandler {
         if let fromPool = pool.first(where: { $0.id == cardId }) {
             let currentEnergy = board.totalSelectedEnergy
             let existingEnergy = board.slots[targetIndex]?.energy ?? 0
-            
-            // Check energy constraints
+
+            // Check energy constraints and duplicates
             if currentEnergy - existingEnergy + fromPool.energy > energyCap { return }
             if boardContainsCard(id: cardId, in: board) { return }
-            
-            // Move card from pool to board
-            if let existing = board.slots[targetIndex] { 
-                pool.append(existing) 
-            }
+
+            // Place card on board without mutating the pool collection
             board.slots[targetIndex] = fromPool
-            pool.removeAll { $0.id == cardId }
             return
         }
         
