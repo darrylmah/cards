@@ -47,6 +47,21 @@ extension Board {
     var firstEmptyIndex: Int? { slots.firstIndex(where: { $0 == nil }) }
     var isDefeated: Bool { slots.compactMap { $0 }.allSatisfy { $0.hp <= 0 } || slots.compactMap { $0 }.isEmpty }
     var totalSelectedEnergy: Int { slots.compactMap { $0?.energy }.reduce(0, +) }
+    
+    mutating func collapseToFront() {
+        var compacted: [Card?] = []
+        compacted.reserveCapacity(Board.maxSlots)
+        
+        for slot in slots {
+            if let card = slot {
+                compacted.append(card)
+            }
+        }
+        if compacted.count < Board.maxSlots {
+            compacted.append(contentsOf: Array(repeating: nil, count: Board.maxSlots - compacted.count))
+        }
+        slots = compacted
+    }
 }
 
 struct Battlefield: Codable {

@@ -41,14 +41,40 @@ struct TeamBuilderView: View {
         )
     }
 
+    private func removeCardFromFormation(at index: Int) {
+        guard let card = board.slots[index] else { return }
+        board.slots[index] = nil
+        board.collapseToFront()
+    }
+
+    private func attemptPlaceFromPool(_ card: Card, targetIndex: Int) {
+        guard !boardContainsCard(id: card.id) else { return }
+        let existingEnergy = board.slots[targetIndex]?.energy ?? 0
+        let newTotal = board.totalSelectedEnergy - existingEnergy + card.energy
+        guard newTotal <= energyCap else { return }
+        board.slots[targetIndex] = card
+    }
+
+    private func addCardFromPoolToFirstEmpty(_ card: Card) {
+        guard let targetIndex = board.firstEmptyIndex else { return }
+        attemptPlaceFromPool(card, targetIndex: targetIndex)
+    }
+
+    private func moveCardOnBoard(id: UUID, to targetIndex: Int) {
+        guard let sourceIndex = board.slots.firstIndex(where: { $0?.id == id }) else { return }
+        guard sourceIndex != targetIndex else { return }
+        let movingCard = board.slots[sourceIndex]
+        let targetCard = board.slots[targetIndex]
+        board.slots[sourceIndex] = targetCard
+        board.slots[targetIndex] = movingCard
+    }
+
     private func handleDrop(_ id: UUID, to targetIndex: Int) {
-        DragDropHandler.handleDrop(
-            cardId: id,
-            to: targetIndex,
-            pool: &pool,
-            board: &board,
-            energyCap: energyCap
-        )
+        if let card = pool.first(where: { $0.id == id }) {
+            attemptPlaceFromPool(card, targetIndex: targetIndex)
+        } else {
+            moveCardOnBoard(id: id, to: targetIndex)
+        }
     }
     
     private func formationSlot(at index: Int, size: CGSize) -> some View {
@@ -60,12 +86,7 @@ struct TeamBuilderView: View {
             index: index,
             isHighlighted: highlighted,
             isPlayerSide: true,
-            onTap: {
-                if let existing = board.slots[index] {
-                    board.slots[index] = nil
-                    pool.append(existing)
-                }
-            },
+            onTap: { removeCardFromFormation(at: index) },
             size: size
         )
         .onDrag {
@@ -88,31 +109,39 @@ struct TeamBuilderView: View {
     }
     
     
-    private func poolCardView(_ card: Card, size: CGSize, affordable: Bool) -> some View {
-        let isSelected = boardContainsCard(id: card.id)
-        let isInactive = isSelected || !affordable
+    private func poolCardView(_ card: Card, size: CGSize, affordable: Bool, isSelected: Bool) -> some View {
+        let canSelect = affordable && !isSelected
         return CardSlotView(card: card, index: 0, isHighlighted: false, isPlayerSide: true, onTap: {
-            guard !isInactive else { return }
-            if let empty = board.firstEmptyIndex, remainingEnergy >= card.energy {
-                board.slots[empty] = card
-            }
+            guard canSelect else { return }
+            addCardFromPoolToFirstEmpty(card)
         },
         size: size
         )
+        .saturation(isSelected ? 0 : 1)
+        .opacity(isSelected ? 0.55 : 1)
         .overlay(
-            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
-                .fill(
-                    isSelected
-                    ? Color.black.opacity(0.35)
-                    : Color.red.opacity(affordable ? 0: 0.22)
-                )
+            Group {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
+                        .fill(Color.gray.opacity(0.35))
+                } else if !affordable {
+                    RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
+                        .fill(Color.red.opacity(0.22))
+                }
+            }
         )
         .onLongPressGesture { selectedCardForDetail = card }
         .onDrag {
-            guard affordable, !isSelected else { return NSItemProvider() }
+            guard canSelect else { return NSItemProvider() }
             draggingID = card.id
             return NSItemProvider(object: card.id.uuidString as NSString)
         }
+    }
+    
+
+    private func submitTeam() {
+        onSubmit()
+        board = Board()
     }
     
     var body: some View {
@@ -122,47 +151,11 @@ struct TeamBuilderView: View {
                 repeating: GridItem(.flexible(), spacing: BattleLayout.gridSpacing),
                 count: metrics.poolCardColumns
             )
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 HStack {
                     Label("Time: \(remaining / 60):\(String(format: "%02d", remaining % 60))", systemImage: "clock")
                     Spacer()
                     Label("Energy: \(usedEnergy)/\(energyCap)", systemImage: "bolt.fill")
-                }
-                .padding(.horizontal, metrics.horizontalPadding)
-
-                // Search/sort/filter toolbar
-                HStack(spacing: 8) {
-
-                    Menu {
-                        // Sort
-                        Section("Sort") {
-                            Picker("Sort", selection: $sortKey) {
-                                Text("Energy ↑").tag(CardFiltering.SortKey.energyAsc)
-                                Text("Energy ↓").tag(CardFiltering.SortKey.energyDesc)
-                                Text("ATK ↓").tag(CardFiltering.SortKey.atkDesc)
-                                Text("HP ↓").tag(CardFiltering.SortKey.hpDesc)
-                                Text("Speed ↓").tag(CardFiltering.SortKey.speedDesc)
-                            }
-                        }
-                        // Filter Role
-                        Section("Role") {
-                            Button("All") { selectedRole = nil }
-                            ForEach(Role.allCases, id: \.self) { r in
-                                Button(r.rawValue.capitalized) { selectedRole = r }
-                            }
-                        }
-                        // Filter House
-                        Section("House") {
-                            Button("All") { selectedHouse = nil }
-                            ForEach(House.allCases, id: \.self) { h in
-                                Button(h.displayName) { selectedHouse = h }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .padding(8)
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                    }
                 }
                 .padding(.horizontal, metrics.horizontalPadding)
 
@@ -187,8 +180,42 @@ struct TeamBuilderView: View {
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.verticalPadding)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Pick Your Cards").font(.headline)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Pick Your Cards").font(.headline)
+                        Spacer()
+                        Menu {
+                            // Sort
+                            Section("Sort") {
+                                Picker("Sort", selection: $sortKey) {
+                                    Text("Energy ↑").tag(CardFiltering.SortKey.energyAsc)
+                                    Text("Energy ↓").tag(CardFiltering.SortKey.energyDesc)
+                                    Text("ATK ↓").tag(CardFiltering.SortKey.atkDesc)
+                                    Text("HP ↓").tag(CardFiltering.SortKey.hpDesc)
+                                    Text("Speed ↓").tag(CardFiltering.SortKey.speedDesc)
+                                }
+                            }
+                            // Filter Role
+                            Section("Role") {
+                                Button("All") { selectedRole = nil }
+                                ForEach(Role.allCases, id: \.self) { r in
+                                    Button(r.rawValue.capitalized) { selectedRole = r }
+                                }
+                            }
+                            // Filter House
+                            Section("House") {
+                                Button("All") { selectedHouse = nil }
+                                ForEach(House.allCases, id: \.self) { h in
+                                    Button(h.displayName) { selectedHouse = h }
+                                }
+                            }
+                        } label: {
+                            Label("Sort / Filter", systemImage: "slider.horizontal.3")
+                                .labelStyle(.iconOnly)
+                                .padding(8)
+                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
                     Text("Cards tinted red exceed the remaining energy and can’t be placed.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -196,10 +223,12 @@ struct TeamBuilderView: View {
                         LazyVGrid(columns: poolCols, spacing: BattleLayout.gridSpacing) {
                             ForEach(visiblePool, id: \.id) { card in
                                 let affordable = remainingEnergy >= card.energy
+                                let isSelected = boardContainsCard(id: card.id)
                                 poolCardView(
                                     card,
                                     size: metrics.poolCardSize,
-                                    affordable: affordable
+                                    affordable: affordable,
+                                    isSelected: isSelected
                                 )
                             }
                         }
@@ -209,14 +238,14 @@ struct TeamBuilderView: View {
                     }
                 }
 
-                Button(action: onSubmit) { Text("Submit & Start Battle").bold() }
+                Button(action: submitTeam) { Text("Submit & Start Battle").bold() }
                     .buttonStyle(.borderedProminent)
                     .disabled(usedEnergy == 0 || usedEnergy > energyCap)
                     .padding(.bottom, 8)
             }
         }
         .onReceive(ticker) { _ in
-            if remaining > 0 { remaining -= 1 } else { onSubmit() }
+            if remaining > 0 { remaining -= 1 } else { submitTeam() }
         }
         .onAppear { remaining = 120 }
         .sheet(item: $selectedCardForDetail) { card in
@@ -235,7 +264,7 @@ struct TeamBuilderView: View {
 
         init(geometry: GeometryProxy) {
             horizontalPadding = BattleLayout.outerPadding
-            verticalPadding = 12
+            verticalPadding = 8
 
             let formationWidth = (
                 geometry.size.width
@@ -255,7 +284,7 @@ struct TeamBuilderView: View {
                 count: BattleLayout.boardColumns
             )
 
-            poolCardColumns = 3
+            poolCardColumns = 4
             let poolWidth = (
                 geometry.size.width
                 - horizontalPadding * 2
