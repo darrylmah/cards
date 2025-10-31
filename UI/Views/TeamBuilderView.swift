@@ -12,25 +12,32 @@ struct TeamBuilderView: View {
     @Binding var board: Board
     let energyCap: Int
     var onSubmit: () -> Void
-
+    
     @State private var draggingID: UUID? = nil
+    @State private var draggingCard: Card? = nil
+    @State private var dragSourceSlots: [Card?]? = nil
+    @State private var dragPreviewSlots: [Card?]? = nil
+    @State private var dragLocation: CGPoint? = nil
+    @State private var dragFingerOffset: CGSize? = nil
+    @State private var dragOriginIndex: Int? = nil
+    @State private var hoverIndex: Int? = nil
     @State private var remaining: Int = 120
-
+    
     // Search / Sort / Filter
     @State private var searchText: String = ""
     @State private var selectedRole: Role? = nil
     @State private var selectedHouse: House? = nil
     @State private var sortKey: CardFiltering.SortKey = .energyAsc
-
+    
     // Card detail sheet
     @State private var selectedCardForDetail: Card? = nil
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
+    
     private var usedEnergy: Int { board.totalSelectedEnergy }
     private var remainingEnergy: Int { max(0, energyCap - usedEnergy) }
-
+    
     private func boardContainsCard(id: UUID) -> Bool { board.slots.contains { $0?.id == id } }
-
+    
     private var visiblePool: [Card] {
         return CardFiltering.filterAndSort(
             cards: pool,
@@ -40,13 +47,13 @@ struct TeamBuilderView: View {
             sortKey: sortKey
         )
     }
-
+    
     private func removeCardFromFormation(at index: Int) {
         guard let card = board.slots[index] else { return }
         board.slots[index] = nil
         board.collapseToFront()
     }
-
+    
     private func attemptPlaceFromPool(_ card: Card, targetIndex: Int) {
         guard !boardContainsCard(id: card.id) else { return }
         let existingEnergy = board.slots[targetIndex]?.energy ?? 0
@@ -54,42 +61,113 @@ struct TeamBuilderView: View {
         guard newTotal <= energyCap else { return }
         board.slots[targetIndex] = card
     }
-
+    
     private func addCardFromPoolToFirstEmpty(_ card: Card) {
         guard let targetIndex = board.firstEmptyIndex else { return }
         attemptPlaceFromPool(card, targetIndex: targetIndex)
     }
+    
+    private func applyDragPreviewPlacement(targetIndex: Int) {
+        guard let card = draggingCard, let origin = dragOriginIndex else { return }
+        let baseSlots = dragSourceSlots ?? board.slots
+        let clampedTarget = max(0, min(targetIndex, Board.maxSlots - 1))
 
-    private func reorderFormation(draggingID: UUID, targetID: UUID) {
-        var orderedCards = board.slots.compactMap { $0 }
-        
-        guard
-            let fromIndex = orderedCards.firstIndex(where: { $0.id == draggingID }),
-            let toIndex = orderedCards.firstIndex(where: { $0.id == targetID }),
-            fromIndex != toIndex
-        else { return }
-        
-        let moving = orderedCards.remove(at: fromIndex)
-        orderedCards.insert(moving, at: toIndex)
-        
-        withAnimation(.spring(response: 0.3)) {
-            let filled = orderedCards.map { Optional($0) }
-            let padding = Array<Card?>(repeating: nil, count: max(0, Board.maxSlots - filled.count))
-            board.slots = filled + padding
+        var preview = baseSlots
+        preview[origin] = nil
+
+        if clampedTarget == origin {
+            preview[origin] = card
+        } else if clampedTarget < origin {
+            for idx in stride(from: origin - 1, through: clampedTarget, by: -1) {
+                preview[idx + 1] = preview[idx]
+            }
+            preview[clampedTarget] = card
+        } else {
+            if origin + 1 <= clampedTarget {
+                for idx in (origin + 1)...clampedTarget {
+                    preview[idx - 1] = preview[idx]
+                }
+            }
+            preview[clampedTarget] = card
         }
+
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9, blendDuration: 0.1)) {
+            dragPreviewSlots = preview
+            hoverIndex = clampedTarget
+        }
+    }
+
+    private func commitDragPlacement() {
+        guard let card = draggingCard, let origin = dragOriginIndex else { cleanupDragState(); return }
+        let baseSlots = dragSourceSlots ?? board.slots
+        let target = hoverIndex ?? origin
+        var slots = baseSlots
+        slots[origin] = nil
+
+        if target == origin {
+            slots[origin] = card
+        } else if target < origin {
+            for idx in stride(from: origin - 1, through: target, by: -1) {
+                slots[idx + 1] = slots[idx]
+            }
+            slots[target] = card
+        } else {
+            if origin + 1 <= target {
+                for idx in (origin + 1)...target {
+                    slots[idx - 1] = slots[idx]
+                }
+            }
+            slots[target] = card
+        }
+
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.2)) {
+            board.slots = slots
+        }
+
+        cleanupDragState()
+    }
+
+    private func cleanupDragState() {
+        draggingID = nil
+        draggingCard = nil
+        dragSourceSlots = nil
+        dragPreviewSlots = nil
+        dragLocation = nil
+        hoverIndex = nil
+        dragOriginIndex = nil
+        dragFingerOffset = nil
+    }
+
+    private func targetIndex(for location: CGPoint, cardSize: CGSize) -> Int {
+        let columnWidth = cardSize.width + BattleLayout.gridSpacing
+        let rowHeight = cardSize.height + BattleLayout.gridSpacing
+
+        let approximateCol = (location.x - cardSize.width / 2) / columnWidth
+        let approximateRow = (location.y - cardSize.height / 2) / rowHeight
+
+        let clampedCol = min(max(Int(round(approximateCol)), 0), BattleLayout.boardColumns - 1)
+        let maxRows = Int(ceil(Double(Board.maxSlots) / Double(BattleLayout.boardColumns)))
+        let clampedRow = min(max(Int(round(approximateRow)), 0), maxRows - 1)
+
+        let index = clampedRow * BattleLayout.boardColumns + clampedCol
+        return min(max(index, 0), Board.maxSlots - 1)
     }
     
     @ViewBuilder
     private func formationSlot(at index: Int, size: CGSize) -> some View {
-        let card = board.slots[index]
-        let highlighted = draggingID != nil && draggingID != card?.id
+        let activeSlots = dragPreviewSlots ?? board.slots
+        let card = activeSlots[index]
+        let highlighted = hoverIndex == index && draggingCard != nil
         
         var base = CardSlotView(
             card: card,
             index: index,
             isHighlighted: highlighted,
             isPlayerSide: true,
-            onTap: { removeCardFromFormation(at: index) },
+            onTap: {
+                guard draggingCard == nil else { return }
+                removeCardFromFormation(at: index)
+            },
             size: size
         )
         
@@ -104,19 +182,55 @@ struct TeamBuilderView: View {
                             .foregroundStyle(Color.white)
                     }
                 }
-                .onDrag {
-                    draggingID = card.id
-                    return NSItemProvider(object: card.id.uuidString as NSString)
-                }
-                .onDrop(
-                    of: [.text],
-                    delegate: FormationCardDropDelegate(
-                        targetID: card.id,
-                        draggingID: $draggingID,
-                        onReorder: { draggingID, targetID in
-                            reorderFormation(draggingID: draggingID, targetID: targetID)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .named("formationGrid"))
+                        .onChanged { value in
+                            let translation = value.translation
+                            let magnitude = hypot(translation.width, translation.height)
+                            if draggingCard == nil {
+                                guard magnitude > 4 else { return }
+                                draggingID = card.id
+                                draggingCard = card
+                                dragSourceSlots = board.slots
+                                dragPreviewSlots = nil
+                                dragOriginIndex = index
+                                hoverIndex = index
+
+                                let spacing = BattleLayout.gridSpacing
+                                let col = index % BattleLayout.boardColumns
+                                let row = index / BattleLayout.boardColumns
+                                let center = CGPoint(
+                                    x: (size.width + spacing) * CGFloat(col) + size.width / 2,
+                                    y: (size.height + spacing) * CGFloat(row) + size.height / 2
+                                )
+                                dragFingerOffset = CGSize(
+                                    width: value.startLocation.x - center.x,
+                                    height: value.startLocation.y - center.y
+                                )
+                            }
+
+                            let location: CGPoint
+                            if let offset = dragFingerOffset {
+                                location = CGPoint(
+                                    x: value.location.x - offset.width,
+                                    y: value.location.y - offset.height
+                                )
+                            } else {
+                                location = value.location
+                            }
+
+                            dragLocation = location
+
+                            let nextIndex = targetIndex(for: location, cardSize: size)
+                            applyDragPreviewPlacement(targetIndex: nextIndex)
                         }
-                    )
+                        .onEnded { _ in
+                            if draggingCard != nil {
+                                commitDragPlacement()
+                            } else if board.slots[index] != nil {
+                                removeCardFromFormation(at: index)
+                            }
+                        }
                 )
         } else {
             base
@@ -130,7 +244,7 @@ struct TeamBuilderView: View {
             guard canSelect else { return }
             addCardFromPoolToFirstEmpty(card)
         },
-        size: size
+                            size: size
         )
         .saturation(isSelected ? 0 : 1)
         .opacity(isSelected ? 0.55 : 1)
@@ -159,10 +273,11 @@ struct TeamBuilderView: View {
         }
     }
     
-
+    
     private func submitTeam() {
         onSubmit()
         board = Board()
+        cleanupDragState()
     }
     
     var body: some View {
@@ -179,7 +294,7 @@ struct TeamBuilderView: View {
                     Label("Energy: \(usedEnergy)/\(energyCap)", systemImage: "bolt.fill")
                 }
                 .padding(.horizontal, metrics.horizontalPadding)
-
+                
                 VStack(spacing: 6) {
                     Text("Upcoming Battle Rules").font(.headline)
                     Text("Energy cap: \(energyCap)").font(.subheadline)
@@ -188,19 +303,29 @@ struct TeamBuilderView: View {
                 .padding()
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, metrics.horizontalPadding)
-
+                
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Your Formation").font(.headline)
-                    LazyVGrid(columns: metrics.formationColumns, alignment: .center, spacing: BattleLayout.gridSpacing) {
-                        ForEach(0..<Board.maxSlots, id: \.self) { idx in
-                            formationSlot(at: idx, size: metrics.formationCardSize)
+                    ZStack(alignment: .topLeading) {
+                        LazyVGrid(columns: metrics.formationColumns, alignment: .center, spacing: BattleLayout.gridSpacing) {
+                            ForEach(0..<Board.maxSlots, id: \.self) { idx in
+                                formationSlot(at: idx, size: metrics.formationCardSize)
+                            }
+                        }
+                        .coordinateSpace(name: "formationGrid")
+                        
+                        if let draggingCard, let dragLocation {
+                            CardView(card: draggingCard, size: metrics.formationCardSize)
+                                .shadow(radius: BattleLayout.cardShadowRadius * 2)
+                                .position(dragLocation)
+                                .allowsHitTesting(false)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.verticalPadding)
-
+                
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Pick Your Cards").font(.headline)
@@ -258,7 +383,7 @@ struct TeamBuilderView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-
+                
                 Button(action: submitTeam) { Text("Submit & Start Battle").bold() }
                     .buttonStyle(.borderedProminent)
                     .disabled(usedEnergy == 0 || usedEnergy > energyCap)
@@ -282,11 +407,11 @@ struct TeamBuilderView: View {
         let formationCardSize: CGSize
         let poolCardColumns: Int
         let poolCardSize: CGSize
-
+        
         init(geometry: GeometryProxy) {
             horizontalPadding = BattleLayout.outerPadding
             verticalPadding = 8
-
+            
             let formationWidth = (
                 geometry.size.width
                 - horizontalPadding * 2
@@ -304,7 +429,7 @@ struct TeamBuilderView: View {
                 ),
                 count: BattleLayout.boardColumns
             )
-
+            
             poolCardColumns = 4
             let poolWidth = (
                 geometry.size.width
@@ -317,39 +442,4 @@ struct TeamBuilderView: View {
             )
         }
     }
-    
-    private struct FormationCardDropDelegate: DropDelegate {
-        let targetID: UUID
-        @Binding var draggingID: UUID?
-        let onReorder: (UUID, UUID) -> Void
-
-        func validateDrop(info: DropInfo) -> Bool {
-            info.hasItemsConforming(to: [.text])
-        }
-
-        func dropEntered(info: DropInfo) {
-            guard
-                let draggingID,
-                draggingID != targetID
-            else { return }
-
-            onReorder(draggingID, targetID)
-        }
-
-        func dropUpdated(info: DropInfo) -> DropProposal? {
-            DropProposal(operation: .move)
-        }
-
-        func performDrop(info: DropInfo) -> Bool {
-            draggingID = nil
-            return true
-        }
-
-        func dropExited(info: DropInfo) {
-            if draggingID == targetID {
-                draggingID = nil
-            }
-        }
-    }
 }
-
