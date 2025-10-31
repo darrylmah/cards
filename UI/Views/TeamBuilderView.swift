@@ -60,28 +60,31 @@ struct TeamBuilderView: View {
         attemptPlaceFromPool(card, targetIndex: targetIndex)
     }
 
-    private func moveCardOnBoard(id: UUID, to targetIndex: Int) {
-        guard let sourceIndex = board.slots.firstIndex(where: { $0?.id == id }) else { return }
-        guard sourceIndex != targetIndex else { return }
-        let movingCard = board.slots[sourceIndex]
-        let targetCard = board.slots[targetIndex]
-        board.slots[sourceIndex] = targetCard
-        board.slots[targetIndex] = movingCard
-    }
-
-    private func handleDrop(_ id: UUID, to targetIndex: Int) {
-        if let card = pool.first(where: { $0.id == id }) {
-            attemptPlaceFromPool(card, targetIndex: targetIndex)
-        } else {
-            moveCardOnBoard(id: id, to: targetIndex)
+    private func reorderFormation(draggingID: UUID, targetID: UUID) {
+        var orderedCards = board.slots.compactMap { $0 }
+        
+        guard
+            let fromIndex = orderedCards.firstIndex(where: { $0.id == draggingID }),
+            let toIndex = orderedCards.firstIndex(where: { $0.id == targetID }),
+            fromIndex != toIndex
+        else { return }
+        
+        let moving = orderedCards.remove(at: fromIndex)
+        orderedCards.insert(moving, at: toIndex)
+        
+        withAnimation(.spring(response: 0.3)) {
+            let filled = orderedCards.map { Optional($0) }
+            let padding = Array<Card?>(repeating: nil, count: max(0, Board.maxSlots - filled.count))
+            board.slots = filled + padding
         }
     }
     
+    @ViewBuilder
     private func formationSlot(at index: Int, size: CGSize) -> some View {
         let card = board.slots[index]
         let highlighted = draggingID != nil && draggingID != card?.id
         
-        return CardSlotView(
+        var base = CardSlotView(
             card: card,
             index: index,
             isHighlighted: highlighted,
@@ -89,22 +92,34 @@ struct TeamBuilderView: View {
             onTap: { removeCardFromFormation(at: index) },
             size: size
         )
-        .onDrag {
-            guard let existing = board.slots[index] else { return NSItemProvider() }
-            draggingID = existing.id
-            return NSItemProvider(object: existing.id.uuidString as NSString)
-        }
-        .onDrop(of: [.text], isTargeted: nil) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadObject(ofClass: NSString.self) { obj, _ in
-                if let s = obj as? String, let id = UUID(uuidString: s) {
-                    DispatchQueue.main.async {
-                        self.handleDrop(id, to: index)
-                        self.draggingID = nil
+        
+        if let card {
+            base
+                .opacity(draggingID == card.id ? 0.35 : 1)
+                .overlay(alignment: .topTrailing) {
+                    if draggingID == card.id {
+                        Image(systemName: "hand.point.up.left.fill")
+                            .font(.caption)
+                            .padding(6)
+                            .foregroundStyle(Color.white)
                     }
                 }
-            }
-            return true
+                .onDrag {
+                    draggingID = card.id
+                    return NSItemProvider(object: card.id.uuidString as NSString)
+                }
+                .onDrop(
+                    of: [.text],
+                    delegate: FormationCardDropDelegate(
+                        targetID: card.id,
+                        draggingID: $draggingID,
+                        onReorder: { draggingID, targetID in
+                            reorderFormation(draggingID: draggingID, targetID: targetID)
+                        }
+                    )
+                )
+        } else {
+            base
         }
     }
     
@@ -130,11 +145,17 @@ struct TeamBuilderView: View {
                 }
             }
         )
-        .onLongPressGesture { selectedCardForDetail = card }
-        .onDrag {
-            guard canSelect else { return NSItemProvider() }
-            draggingID = card.id
-            return NSItemProvider(object: card.id.uuidString as NSString)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                selectedCardForDetail = card
+            } label: {
+                Image(systemName: "info.circle.fill")
+                    .font(.caption)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+            .background(.thinMaterial, in: Circle())
+            .padding(6)
         }
     }
     
@@ -294,6 +315,40 @@ struct TeamBuilderView: View {
                 width: poolWidth,
                 height: poolWidth * BattleLayout.cardAspectRatio
             )
+        }
+    }
+    
+    private struct FormationCardDropDelegate: DropDelegate {
+        let targetID: UUID
+        @Binding var draggingID: UUID?
+        let onReorder: (UUID, UUID) -> Void
+
+        func validateDrop(info: DropInfo) -> Bool {
+            info.hasItemsConforming(to: [.text])
+        }
+
+        func dropEntered(info: DropInfo) {
+            guard
+                let draggingID,
+                draggingID != targetID
+            else { return }
+
+            onReorder(draggingID, targetID)
+        }
+
+        func dropUpdated(info: DropInfo) -> DropProposal? {
+            DropProposal(operation: .move)
+        }
+
+        func performDrop(info: DropInfo) -> Bool {
+            draggingID = nil
+            return true
+        }
+
+        func dropExited(info: DropInfo) {
+            if draggingID == targetID {
+                draggingID = nil
+            }
         }
     }
 }

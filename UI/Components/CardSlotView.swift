@@ -17,35 +17,34 @@ struct CardSlotView: View {
     let size: CGSize
 
     var body: some View {
-        Button(action: { if isPlayerSide, card != nil { onTap() } }) {
-            ZStack {
-                if let c = card {
-                    CardView(card: c, size: size)
-                } else {
-                    // Empty placeholder with consistent frame
-                    RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
-                        .strokeBorder(.secondary, lineWidth: 1)
-                        .background(
-                            RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .frame(width: size.width, height: size.height)
+        ZStack {
+            if let c = card {
+                CardView(card: c, size: size)
+            } else {
+                // Empty placeholder with consistent frame
+                RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
+                    .strokeBorder(.secondary, lineWidth: 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
+                            .fill(.ultraThinMaterial)
+                    )
+                    .frame(width: size.width, height: size.height)
 
-                    Text("Empty")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Empty")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-        .buttonStyle(.plain)
+        .frame(width: size.width, height: size.height)
         .contentShape(RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius))
-        .frame(minWidth: size.width, minHeight: size.height)
+        .onTapGesture {
+            if isPlayerSide, card != nil { onTap() }
+        }
         // Highlight border
         .overlay(
             RoundedRectangle(cornerRadius: BattleLayout.cardCornerRadius)
                 .strokeBorder(isHighlighted ? .yellow : .clear, lineWidth: BattleLayout.cardHighlightLineWidth)
         )
-        .disabled(card == nil)
     }
 }
 

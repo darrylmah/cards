@@ -28,7 +28,7 @@ struct HomeView: View {
 
             Button("Initiate Battle") { onInitiate() }
                 .buttonStyle(.borderedProminent)
-
+            
             Spacer()
         }
         .padding()
